@@ -1,0 +1,10 @@
+decay:
+    mother: Lb
+    daughter: He3
+
+generator:
+    process: SoftQCD
+    tune: CRMode2
+
+FONLL:
+    filename: inputs/FONLL-Bhadron-dsdpt-sqrts13000-100GeV-50MeVbins.txt
