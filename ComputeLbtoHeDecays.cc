@@ -23,11 +23,14 @@
 #include <TLorentzVector.h>
 
 #include "Pythia8/Pythia.h"
-#include "Pythia8Plugins/HepMC2.h"
+#include "Pythia8Plugins/HepMC3.h"
 
 #endif
 
 using namespace Pythia8;
+
+const int kPdgHe3 = 1000020030;
+const double massHe3 = 2.80839160743;
 
 enum FONLLPred {
     kCentral, 
@@ -36,12 +39,12 @@ enum FONLLPred {
 };
 
 //__________________________________________________________________________________________________
-void ComputeLbtoHeDecays(TString cfgFileName, int nEvents=1000000, std::string outFileName="AnalysisResults.root", int seed=42);
-bool SimpleCoalescence(double p1[3], double p2[3], double p3[3], double pHe3[3], double pc = 0.2 /* MeV/c */);
+void ComputeLbtoHeDecays(TString cfgFileName, int nEvents=1000000, std::string outFileNameRoot="AnalysisResults.root", std::string outFileNameHepMC="AnalysisResults.hepmc", int seed=42);
+bool SimpleCoalescence(double p1[3], double p2[3], double p3[3], double pHe3[3], double pc = 0.2 /* GeV/c */);
 TH1F* ReadFONLLVsPt(string txtFileName, int whichPred, double ptMin, double binWidth, int nBins);
 
 //__________________________________________________________________________________________________
-void ComputeLbtoHeDecays(TString cfgFileName, int nEvents, std::string outFileName, int seed)
+void ComputeLbtoHeDecays(TString cfgFileName, int nEvents, std::string outFileNameRoot, std::string outFileNameHepMC, int seed)
 {
     //__________________________________________________________
     //Load configs from yaml file
@@ -60,102 +63,109 @@ void ComputeLbtoHeDecays(TString cfgFileName, int nEvents, std::string outFileNa
     std::string process = config["generator"]["process"].as<std::string>();
     std::string tune = config["generator"]["process"].as<std::string>();
     std::string FONLLFileName = config["FONLL"]["filename"].as<std::string>();
+    double coalRadius = config["coalescence"]["radius"].as<double>();
+    double coalMomRadius = config["coalescence"]["momentum_radius"].as<double>();
 
     //__________________________________________________________
     // create and configure pythia generator
     Pythia pythia;
     if(process == "SoftQCD")
-        pythia.ReadString("SoftQCD:all = on");
+        pythia.readString("SoftQCD:all = on");
     else if(process == "HardQCD")
     {
-        pythia.ReadString("HardQCD:hardccbar = on");
-        pythia.ReadString("HardQCD:hardbbbar = on");
+        pythia.readString("HardQCD:hardccbar = on");
+        pythia.readString("HardQCD:hardbbbar = on");
     }
 
     // set tune
     if(tune == "Monash")
     {
-        pythia.ReadString(Form("Tune:pp = 14"));
+        pythia.readString(Form("Tune:pp = 14"));
     }
     else if(tune == "CRMode0")
     {
-        pythia.ReadString(Form("Tune:pp = 14"));
-        pythia.ReadString("ColourReconnection:mode = 1");
-        pythia.ReadString("ColourReconnection:allowDoubleJunRem = off");
-        pythia.ReadString("ColourReconnection:m0 = 2.9");
-        pythia.ReadString("ColourReconnection:allowJunctions = on");
-        pythia.ReadString("ColourReconnection:junctionCorrection = 1.43");
-        pythia.ReadString("ColourReconnection:timeDilationMode = 0");
-        pythia.ReadString("StringPT:sigma = 0.335");
-        pythia.ReadString("StringZ:aLund = 0.36");
-        pythia.ReadString("StringZ:bLund = 0.56");
-        pythia.ReadString("StringFlav:probQQtoQ = 0.078");
-        pythia.ReadString("StringFlav:ProbStoUD = 0.2");
-        pythia.ReadString("StringFlav:probQQ1toQQ0join = 0.0275,0.0275,0.0275,0.0275");
-        pythia.ReadString("MultiPartonInteractions:pT0Ref = 2.12");
-        pythia.ReadString("BeamRemnants:remnantMode = 1");
-        pythia.ReadString("BeamRemnants:saturation =5");
+        pythia.readString(Form("Tune:pp = 14"));
+        pythia.readString("ColourReconnection:mode = 1");
+        pythia.readString("ColourReconnection:allowDoubleJunRem = off");
+        pythia.readString("ColourReconnection:m0 = 2.9");
+        pythia.readString("ColourReconnection:allowJunctions = on");
+        pythia.readString("ColourReconnection:junctionCorrection = 1.43");
+        pythia.readString("ColourReconnection:timeDilationMode = 0");
+        pythia.readString("StringPT:sigma = 0.335");
+        pythia.readString("StringZ:aLund = 0.36");
+        pythia.readString("StringZ:bLund = 0.56");
+        pythia.readString("StringFlav:probQQtoQ = 0.078");
+        pythia.readString("StringFlav:ProbStoUD = 0.2");
+        pythia.readString("StringFlav:probQQ1toQQ0join = 0.0275,0.0275,0.0275,0.0275");
+        pythia.readString("MultiPartonInteractions:pT0Ref = 2.12");
+        pythia.readString("BeamRemnants:remnantMode = 1");
+        pythia.readString("BeamRemnants:saturation =5");
     }
     else if(tune == "CRMode2")
     {
-        pythia.ReadString(Form("Tune:pp = 14"));
-        pythia.ReadString("ColourReconnection:mode = 1");
-        pythia.ReadString("ColourReconnection:allowDoubleJunRem = off");
-        pythia.ReadString("ColourReconnection:m0 = 0.3");
-        pythia.ReadString("ColourReconnection:allowJunctions = on");
-        pythia.ReadString("ColourReconnection:junctionCorrection = 1.20");
-        pythia.ReadString("ColourReconnection:timeDilationMode = 2");
-        pythia.ReadString("ColourReconnection:timeDilationPar = 0.18");
-        pythia.ReadString("StringPT:sigma = 0.335");
-        pythia.ReadString("StringZ:aLund = 0.36");
-        pythia.ReadString("StringZ:bLund = 0.56");
-        pythia.ReadString("StringFlav:probQQtoQ = 0.078");
-        pythia.ReadString("StringFlav:ProbStoUD = 0.2");
-        pythia.ReadString("StringFlav:probQQ1toQQ0join = 0.0275,0.0275,0.0275,0.0275");
-        pythia.ReadString("MultiPartonInteractions:pT0Ref = 2.15");
-        pythia.ReadString("BeamRemnants:remnantMode = 1");
-        pythia.ReadString("BeamRemnants:saturation =5");
+        pythia.readString(Form("Tune:pp = 14"));
+        pythia.readString("ColourReconnection:mode = 1");
+        pythia.readString("ColourReconnection:allowDoubleJunRem = off");
+        pythia.readString("ColourReconnection:m0 = 0.3");
+        pythia.readString("ColourReconnection:allowJunctions = on");
+        pythia.readString("ColourReconnection:junctionCorrection = 1.20");
+        pythia.readString("ColourReconnection:timeDilationMode = 2");
+        pythia.readString("ColourReconnection:timeDilationPar = 0.18");
+        pythia.readString("StringPT:sigma = 0.335");
+        pythia.readString("StringZ:aLund = 0.36");
+        pythia.readString("StringZ:bLund = 0.56");
+        pythia.readString("StringFlav:probQQtoQ = 0.078");
+        pythia.readString("StringFlav:ProbStoUD = 0.2");
+        pythia.readString("StringFlav:probQQ1toQQ0join = 0.0275,0.0275,0.0275,0.0275");
+        pythia.readString("MultiPartonInteractions:pT0Ref = 2.15");
+        pythia.readString("BeamRemnants:remnantMode = 1");
+        pythia.readString("BeamRemnants:saturation =5");
     }
     else if(tune == "CRMode3")
     {
-        pythia.ReadString(Form("Tune:pp = 14"));
-        pythia.ReadString("ColourReconnection:mode = 1");
-        pythia.ReadString("ColourReconnection:allowDoubleJunRem = off");
-        pythia.ReadString("ColourReconnection:m0 = 0.3");
-        pythia.ReadString("ColourReconnection:allowJunctions = on");
-        pythia.ReadString("ColourReconnection:junctionCorrection = 1.15");
-        pythia.ReadString("ColourReconnection:timeDilationMode = 3");
-        pythia.ReadString("ColourReconnection:timeDilationPar = 0.073");
-        pythia.ReadString("StringPT:sigma = 0.335");
-        pythia.ReadString("StringZ:aLund = 0.36");
-        pythia.ReadString("StringZ:bLund = 0.56");
-        pythia.ReadString("StringFlav:probQQtoQ = 0.078");
-        pythia.ReadString("StringFlav:ProbStoUD = 0.2");
-        pythia.ReadString("StringFlav:probQQ1toQQ0join = 0.0275,0.0275,0.0275,0.0275");
-        pythia.ReadString("MultiPartonInteractions:pT0Ref = 2.05");
-        pythia.ReadString("BeamRemnants:remnantMode = 1");
-        pythia.ReadString("BeamRemnants:saturation =5");
+        pythia.readString(Form("Tune:pp = 14"));
+        pythia.readString("ColourReconnection:mode = 1");
+        pythia.readString("ColourReconnection:allowDoubleJunRem = off");
+        pythia.readString("ColourReconnection:m0 = 0.3");
+        pythia.readString("ColourReconnection:allowJunctions = on");
+        pythia.readString("ColourReconnection:junctionCorrection = 1.15");
+        pythia.readString("ColourReconnection:timeDilationMode = 3");
+        pythia.readString("ColourReconnection:timeDilationPar = 0.073");
+        pythia.readString("StringPT:sigma = 0.335");
+        pythia.readString("StringZ:aLund = 0.36");
+        pythia.readString("StringZ:bLund = 0.56");
+        pythia.readString("StringFlav:probQQtoQ = 0.078");
+        pythia.readString("StringFlav:ProbStoUD = 0.2");
+        pythia.readString("StringFlav:probQQ1toQQ0join = 0.0275,0.0275,0.0275,0.0275");
+        pythia.readString("MultiPartonInteractions:pT0Ref = 2.05");
+        pythia.readString("BeamRemnants:remnantMode = 1");
+        pythia.readString("BeamRemnants:saturation =5");
     }
 
     // keep only interesting decays, to be reweighted a posteriori
-    pythia.ReadString("5122:onMode = off");
-    pythia.ReadString("5122:onIfMatch = 2 1 2 2101"); // bRatio="0.0120000" dominant one according to https://arxiv.org/pdf/2006.16251.pdf
-    // pythia.ReadString("5122:onIfMatch = 2 1 4 2101"); // bRatio="0.4411147"
-    // pythia.ReadString("5122:onIfMatch = 2 4 1 2101"); // bRatio="0.0910000"
-    // pythia.ReadString("5122:onIfMatch = 2 3 2 2101"); // bRatio="0.0120000"
-    // pythia.ReadString("5122:onIfMatch = 2 3 4 2101"); // bRatio="0.0800000"
+    pythia.readString("5122:onMode = off");
+    pythia.readString("5122:onIfMatch = 2 1 2 2101"); // bRatio="0.0120000" dominant one according to https://arxiv.org/pdf/2006.16251.pdf
+    // pythia.readString("5122:onIfMatch = 2 1 4 2101"); // bRatio="0.4411147"
+    // pythia.readString("5122:onIfMatch = 2 4 1 2101"); // bRatio="0.0910000"
+    // pythia.readString("5122:onIfMatch = 2 3 2 2101"); // bRatio="0.0120000"
+    // pythia.readString("5122:onIfMatch = 2 3 4 2101"); // bRatio="0.0800000"
+
+    // add 3He
+    pythia.particleData.addParticle(kPdgHe3, "3He++", "3He--", 2, 6, 0, massHe3, 0., massHe3, massHe3, 1.e9);   
 
     // init
-    pythia.ReadString("Random:setSeed = on");
-    pythia.ReadString(Form("Random:seed %d", seed));
-    pythia.Pythia8()->init();
+    pythia.readString("Random:setSeed = on");
+    pythia.readString(Form("Random:seed %d", seed));
+    pythia.init();
 
     //__________________________________________________________
     // perform the simulation
 
-    // Output file
-    TFile outFile(outFileName.data(), "recreate");
+    // define HepMC output
+    HepMC3::WriterAscii outFileHepMC(outFileNameHepMC);
+    HepMC3::Pythia8ToHepMC3 ToHepMC;
 
+    // define histograms
     TH1F* hBR = new TH1F("hBR", ";;BR", 2, 0.5, 2.5);
     hBR->GetXaxis()->SetBinLabel(1, "#Lambda_{b}^{0} #rightarrow d#bar{u}d (ud)_{0}");
     hBR->GetXaxis()->SetBinLabel(2, "#Lambda_{b}^{0} #rightarrow (>=2)p + (>=1)n / #Lambda_{b}^{0} #rightarrow d#bar{u}d (ud)_{0}");
@@ -186,24 +196,12 @@ void ComputeLbtoHeDecays(TString cfgFileName, int nEvents, std::string outFileNa
     TH1F* hHe3FromLb = (TH1F*)hFONLLLb->Clone("hHe3FromLb_y05");
     hHe3FromLb->Reset();
 
-    TTree *treeLb = new TTree("treeLb", "treeLb");
     std::vector<double> pxDau, pyDau, pzDau, ptDau;
-    std::vector<int> pdgDau;
+    std::vector<int> pdgDau, labDau;
     double pxLb, pyLb, pzLb, ptLb;
-    treeLb->Branch("ptLb", &ptLb);
-    treeLb->Branch("pxLb", &pxLb);
-    treeLb->Branch("pyLb", &pyLb);
-    treeLb->Branch("pzLb", &pzLb);
-    treeLb->Branch("ptDau", &ptDau);
-    treeLb->Branch("pxDau", &pxDau);
-    treeLb->Branch("pyDau", &pyDau);
-    treeLb->Branch("pzDau", &pzDau);
-    treeLb->Branch("pdgDau", &pdgDau);
 
-    TClonesArray* particles = new TClonesArray("TParticle", 1000);
     int pdgHb = 5122;
     double massLb = TDatabasePDG::Instance()->GetParticle(pdgHb)->Mass();
-    double massHe3 = 2.80839160743;
     int nEventSel = 0;
     for (int iEvent = 0; iEvent < nEvents; ++iEvent)
     {
@@ -217,36 +215,74 @@ void ComputeLbtoHeDecays(TString cfgFileName, int nEvents, std::string outFileNa
         double pLb = TMath::Sqrt(ptLb * ptLb + pzLb * pzLb);
         double ELb = TMath::Sqrt(massLb * massLb + pLb * pLb);
 
-        pythia.Pythia8()->event.clear();
-        pythia.Pythia8()->event.append(pdgHb, 11, 0, 0, pxLb, pyLb, pzLb, ELb, massLb);
-        int idPart = pythia.Pythia8()->event[0].id();
-        pythia.Pythia8()->particleData.mayDecay(idPart, true);
-        pythia.Pythia8()->moreDecays();
+        // Lb
+        Particle Hb;
+        Hb.id(pdgHb);
+        Hb.status(11);
+        Hb.m(massLb);
+        Hb.xProd(0.);
+        Hb.yProd(0.);
+        Hb.zProd(0.);
+        Hb.e(ELb);
+        Hb.px(pxLb);
+        Hb.py(pyLb);
+        Hb.pz(pzLb);
+        Hb.tau(4.41000e-01); // PDG2020
 
-        pythia.ImportParticles(particles, "All");
-        int nPart = particles->GetEntriesFast();
+        pythia.event.reset();
+        pythia.event.append(Hb);
+        int idPart = pythia.event[0].id();
+        pythia.particleData.mayDecay(idPart, true);
+        pythia.moreDecays();
 
         if(iEvent%1000000 == 0)
-            std::cout << Form("Lb decay number %10d\r", iEvent) << std::endl;
+            std::cout << Form("Lb decay number %10d\r", iEvent);
 
         int nProtons = 0, nAntiProtons = 0, nNeutrons = 0, nAntiNeutrons = 0;
-
-        for (int iPart = 1; iPart < nPart; iPart++)
+        double decVtx[4] = {0., 0., 0., 0.};
+        double decLen = 0.;
+        int nSkipped = 0;
+        for (int iPart = 2; iPart < pythia.event.size(); iPart++)
         {
-            TParticle* part = dynamic_cast<TParticle*>(particles->At(iPart));
-            ptDau.push_back(part->Pt());
-            pxDau.push_back(part->Px());
-            pyDau.push_back(part->Py());
-            pzDau.push_back(part->Pz());
-            pdgDau.push_back(part->GetPdgCode());
-            if(pdgDau[iPart-1] == 2212)
+            if(iPart == 2)
+            {
+                decVtx[0] = pythia.event.at(iPart).xProd();
+                decVtx[1] = pythia.event.at(iPart).yProd();
+                decVtx[2] = pythia.event.at(iPart).zProd();
+                decVtx[3] = pythia.event.at(iPart).tProd();
+                decLen = TMath::Sqrt(decVtx[0]*decVtx[0] + decVtx[1]*decVtx[1] + decVtx[2]*decVtx[2]);
+            }
+            else 
+            {
+                double prodR = TMath::Sqrt(pythia.event.at(iPart).xProd()*pythia.event.at(iPart).xProd() + pythia.event.at(iPart).yProd()*pythia.event.at(iPart).yProd() + pythia.event.at(iPart).zProd()*pythia.event.at(iPart).zProd());
+                if(TMath::Abs(prodR-decLen) > coalRadius) {
+                    nSkipped++;
+                    continue;
+                }
+            }
+
+            double px = pythia.event.at(iPart).px();
+            double py = pythia.event.at(iPart).py();
+            double pz = pythia.event.at(iPart).pz();
+            double pt = TMath::Sqrt(px*px + py*py);
+
+            ptDau.push_back(pt);
+            pxDau.push_back(px);
+            pyDau.push_back(py);
+            pzDau.push_back(pz);
+            pdgDau.push_back(pythia.event.at(iPart).id());
+            labDau.push_back(iPart-nSkipped);
+            
+            if(pdgDau[iPart-2] == 2212)
                 nProtons++;
-            else if(pdgDau[iPart-1] == 2112)
+            else if(pdgDau[iPart-2] == 2112)
                 nNeutrons++;
         }
-        if(nProtons >= 2 and nNeutrons >= 1)
+
+        if(nProtons >= 2 && nNeutrons >= 1)
         {
             double pCoal1[3], pCoal2[3], pCoal3[3];
+            int labCoal[3] = {-1, -1, -1};
             double pCoalHe3[3] = {-999., -999., -999.};
             bool isSecond = false;
             for(size_t iPart=0; iPart<pdgDau.size(); iPart++)
@@ -257,30 +293,59 @@ void ComputeLbtoHeDecays(TString cfgFileName, int nEvents, std::string outFileNa
                         pCoal1[1] = pyDau[iPart];
                         pCoal1[2] = pzDau[iPart];
                         isSecond = true;
+                        labCoal[0] = labDau[iPart];
                     }
                     else {
                         pCoal2[0] = pxDau[iPart];
                         pCoal2[1] = pyDau[iPart];
                         pCoal2[2] = pzDau[iPart];
+                        labCoal[1] = labDau[iPart];
                     }
                 }
                 else if(pdgDau[iPart] == 2112) {
                     pCoal3[0] = pxDau[iPart];
                     pCoal3[1] = pyDau[iPart];
                     pCoal3[2] = pzDau[iPart];
+                    labCoal[2] = labDau[iPart];
                 }
             }
-            bool hasCoalesced = SimpleCoalescence(pCoal1, pCoal2, pCoal3, pCoalHe3);
+            bool hasCoalesced = SimpleCoalescence(pCoal1, pCoal2, pCoal3, pCoalHe3, coalMomRadius);
             if(hasCoalesced) {
                 double ptHe3 = TMath::Sqrt(pCoalHe3[0]*pCoalHe3[0] + pCoalHe3[1]*pCoalHe3[1]);
                 double pHe3 = TMath::Sqrt(ptHe3*ptHe3 + pCoalHe3[2]*pCoalHe3[2]);
-                double EHe3 = TMath::Sqrt(massHe3 * massHe3 + pLb * pLb);
+                double EHe3 = TMath::Sqrt(massHe3 * massHe3 + pHe3 * pHe3);
                 double yHe3 = TMath::Log((EHe3 + pCoalHe3[2]) / (EHe3 - pCoalHe3[2]));
                 if(TMath::Abs(yHe3) < 0.5)
                     hHe3FromLb->Fill(ptHe3);
+
+                Particle He3;
+                He3.id(kPdgHe3);
+                He3.status(93);
+                He3.m(massHe3);
+                He3.xProd(decVtx[0]);
+                He3.yProd(decVtx[1]);
+                He3.zProd(decVtx[2]);
+                He3.tProd(decVtx[3]);
+                He3.e(EHe3);
+                He3.px(pCoalHe3[0]);
+                He3.py(pCoalHe3[1]);
+                He3.pz(pCoalHe3[2]);
+                He3.mother1(1); // Lb
+                He3.mother2(0);
+                He3.daughter1(0);
+                He3.daughter2(0);
+                He3.tau(1.e9); // stable
+
+                for(int iLab=0; iLab<3; iLab++)
+                    pythia.event.remove(labCoal[iLab]-iLab, labCoal[iLab]-iLab); // labels shift by 1 when removing a particle
+                pythia.event.append(He3);
+
+                // write HepMC
+                HepMC3::GenEvent hepmcevt;
+                ToHepMC.fill_next_event(pythia.event, &hepmcevt, -1, &pythia.info);
+                outFileHepMC.write_event(hepmcevt);
             }
             nEventSel++;
-            treeLb->Fill();
         }
 
         ptDau.clear();
@@ -289,16 +354,17 @@ void ComputeLbtoHeDecays(TString cfgFileName, int nEvents, std::string outFileNa
         pzDau.clear();
         pdgDau.clear();
     }
+    outFileHepMC.close();
 
     hBR->SetBinContent(2, static_cast<double>(nEventSel) / nEvents);
     hHe3FromLb->Scale(hFONLLLb->Integral() / nEventSel * hBR->GetBinContent(1) * hBR->GetBinContent(2));
 
     // Save histogram on file and close file.
+    TFile outFile(outFileNameRoot.data(), "recreate");
     outFile.cd();
     hFONLLLb->Write();
     hHe3FromLb->Write();
     hBR->Write();
-    treeLb->Write();
     outFile.Close();
 }
 
