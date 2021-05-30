@@ -12,11 +12,9 @@
 #include <TFile.h>
 #include <TROOT.h>
 #include <TH1.h>
-#include <TTree.h>
+#include <TH2.h>
 #include <TMath.h>
-#include <TClonesArray.h>
 #include <TDatabasePDG.h>
-#include <TParticle.h>
 #include <TRandom3.h>
 #include <TSystem.h>
 #include <TF1.h>
@@ -39,16 +37,16 @@ enum FONLLPred {
 };
 
 //__________________________________________________________________________________________________
-void ComputeLbtoHeDecays(TString cfgFileName, int nEvents=1000000, std::string outFileNameRoot="AnalysisResults.root", std::string outFileNameHepMC="AnalysisResults.hepmc", int seed=42);
+void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents=1000000, std::string outFileNameRoot="AnalysisResults.root", std::string outFileNameHepMC="AnalysisResults.hepmc", int seed=42);
 bool SimpleCoalescence(double p1[3], double p2[3], double p3[3], double pHe3[3], double pc = 0.2 /* GeV/c */);
-TH1F* ReadFONLLVsPt(string txtFileName, int whichPred, double ptMin, double binWidth, int nBins);
+TH1F* ReadFONLLVsPt(std::string txtFileName, int whichPred, double ptMin, double binWidth, int nBins);
 
 //__________________________________________________________________________________________________
-void ComputeLbtoHeDecays(TString cfgFileName, int nEvents, std::string outFileNameRoot, std::string outFileNameHepMC, int seed)
+void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string outFileNameRoot, std::string outFileNameHepMC, int seed)
 {
     //__________________________________________________________
     //Load configs from yaml file
-    YAML::Node config = YAML::LoadFile(cfgFileName.Data());
+    YAML::Node config = YAML::LoadFile(cfgFileName.data());
     if (config.IsNull())
     {
         std::cerr << "\033[31mERROR: yaml config file not found! Exit\033[0m" << std::endl;
@@ -57,7 +55,7 @@ void ComputeLbtoHeDecays(TString cfgFileName, int nEvents, std::string outFileNa
     else 
     {
         std::cout << "\n\n*******************************************" << std::endl;
-        std::cout << Form("\033[32mLoading configuration from file %s\033[0m\n", cfgFileName.Data()) << std::endl;
+        std::cout << Form("\033[32mLoading configuration from file %s\033[0m\n", cfgFileName.data()) << std::endl;
     }
 
     std::string process = config["generator"]["process"].as<std::string>();
@@ -196,6 +194,8 @@ void ComputeLbtoHeDecays(TString cfgFileName, int nEvents, std::string outFileNa
     TH1F* hHe3FromLb = (TH1F*)hFONLLLb->Clone("hHe3FromLb_y05");
     hHe3FromLb->Reset();
 
+    TH2F* hPtLbVsHe3FromLb = new TH2F("hPtLbVsHe3FromLb", ";#it{p}_{T}(#Lambda_{b}^{0}) (GeV/#it{c});#it{p}_{T}(^{3}He) (GeV/#it{c})", 1000, 0., 100., 500., 0., 50.);
+
     std::vector<double> pxDau, pyDau, pzDau, ptDau;
     std::vector<int> pdgDau, labDau;
     double pxLb, pyLb, pzLb, ptLb;
@@ -315,8 +315,10 @@ void ComputeLbtoHeDecays(TString cfgFileName, int nEvents, std::string outFileNa
                 double pHe3 = TMath::Sqrt(ptHe3*ptHe3 + pCoalHe3[2]*pCoalHe3[2]);
                 double EHe3 = TMath::Sqrt(massHe3 * massHe3 + pHe3 * pHe3);
                 double yHe3 = TMath::Log((EHe3 + pCoalHe3[2]) / (EHe3 - pCoalHe3[2]));
-                if(TMath::Abs(yHe3) < 0.5)
+                if(TMath::Abs(yHe3) < 0.5) {
                     hHe3FromLb->Fill(ptHe3);
+                    hPtLbVsHe3FromLb->Fill(ptLb, ptHe3);
+                }
 
                 Particle He3;
                 He3.id(kPdgHe3);
@@ -369,7 +371,7 @@ void ComputeLbtoHeDecays(TString cfgFileName, int nEvents, std::string outFileNa
 }
 
 //__________________________________________________________________________________________________
-TH1F* ReadFONLLVsPt(string txtFileName, int whichPred, double ptMin, double binWidth, int nBins)
+TH1F* ReadFONLLVsPt(std::string txtFileName, int whichPred, double ptMin, double binWidth, int nBins)
 {
     if(txtFileName.find("txt") == string::npos && txtFileName.find("dat") == string::npos && txtFileName.find("csv") == string::npos) {
         std::cerr << "ERROR: Wrong file format! Exit." << std::endl;
