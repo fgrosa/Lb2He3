@@ -7,8 +7,12 @@ generator:
     tune: CRMode2
 
 coalescence:
-    radius: 1.e-6 # mm
+    radius: 1.e-9 # mm
     momentum_radius: 0.2 # MeV
 
 FONLL:
     filename: inputs/FONLL-Bhadron-dsdpt-sqrts13000-100GeV-50MeVbins.txt
+
+output:
+    root: true
+    hepmc: false

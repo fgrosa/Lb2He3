@@ -27,8 +27,12 @@
 
 using namespace Pythia8;
 
-const int kPdgHe3 = 1000020030;
-const double massHe3 = 2.80839160743;
+enum pdgNuclei
+{
+    kPdgHe3 = 1000020030,
+};
+
+static const double massHe3 = 2.80839160743;
 
 enum FONLLPred {
     kCentral, 
@@ -39,6 +43,7 @@ enum FONLLPred {
 //__________________________________________________________________________________________________
 void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents=1000000, std::string outFileNameRoot="AnalysisResults.root", std::string outFileNameHepMC="AnalysisResults.hepmc", int seed=42);
 bool SimpleCoalescence(double p1[3], double p2[3], double p3[3], double pHe3[3], double pc = 0.2 /* GeV/c */);
+std::array<int, 5> CountNumberOfDaughters(std::vector<int> pdg, std::vector<int> status);
 TH1F* ReadFONLLVsPt(std::string txtFileName, int whichPred, double ptMin, double binWidth, int nBins);
 
 //__________________________________________________________________________________________________
@@ -63,6 +68,8 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
     std::string FONLLFileName = config["FONLL"]["filename"].as<std::string>();
     double coalRadius = config["coalescence"]["radius"].as<double>();
     double coalMomRadius = config["coalescence"]["momentum_radius"].as<double>();
+    bool outputRoot = config["output"]["root"].as<bool>();
+    bool outputHepMC = config["output"]["hepmc"].as<bool>();
 
     //__________________________________________________________
     // create and configure pythia generator
@@ -145,8 +152,8 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
     pythia.readString("5122:onIfMatch = 2 1 2 2101"); // bRatio="0.0120000" dominant one according to https://arxiv.org/pdf/2006.16251.pdf
     // pythia.readString("5122:onIfMatch = 2 1 4 2101"); // bRatio="0.4411147"
     // pythia.readString("5122:onIfMatch = 2 4 1 2101"); // bRatio="0.0910000"
-    // pythia.readString("5122:onIfMatch = 2 3 2 2101"); // bRatio="0.0120000"
-    // pythia.readString("5122:onIfMatch = 2 3 4 2101"); // bRatio="0.0800000"
+    // pythia.readString("5122:onIfMatch = 4 3 2 2101"); // bRatio="0.0120000"
+    // pythia.readString("5122:onIfMatch = 4 3 4 2101"); // bRatio="0.0800000"
 
     // add 3He
     pythia.particleData.addParticle(kPdgHe3, "3He++", "3He--", 2, 6, 0, massHe3, 0., massHe3, massHe3, 1.e9);   
@@ -164,10 +171,31 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
     HepMC3::Pythia8ToHepMC3 ToHepMC;
 
     // define histograms
-    TH1F* hBR = new TH1F("hBR", ";;BR", 2, 0.5, 2.5);
+    TH1F* hBR = new TH1F("hBR", ";;BR", 3, 0.5, 3.5);
     hBR->GetXaxis()->SetBinLabel(1, "#Lambda_{b}^{0} #rightarrow d#bar{u}d (ud)_{0}");
     hBR->GetXaxis()->SetBinLabel(2, "#Lambda_{b}^{0} #rightarrow (>=2)p + (>=1)n / #Lambda_{b}^{0} #rightarrow d#bar{u}d (ud)_{0}");
+    hBR->GetXaxis()->SetBinLabel(3, "#Lambda_{b}^{0} #rightarrow ^{3}He + X / #Lambda_{b}^{0} #rightarrow (>=2)p + (>=1)n");
     hBR->SetBinContent(1, 0.0120000);
+
+    TH1F* hDecayChannel = new TH1F("hDecayChannel", "BR", 16, 0.5, 16.5);
+    std::string decayLabel = "^{3}He 2#bar{p}";
+    std::string decayLabelN = "^{3}He #bar{p} #bar{n}";
+    hDecayChannel->GetXaxis()->SetBinLabel(1, Form("%s", decayLabel.data()));
+    hDecayChannel->GetXaxis()->SetBinLabel(2, Form("%s #pi^{0}", decayLabel.data()));
+    hDecayChannel->GetXaxis()->SetBinLabel(3, Form("%s 2#pi^{0}", decayLabel.data()));
+    hDecayChannel->GetXaxis()->SetBinLabel(4, Form("%s #pi^{+} #pi^{#minus}", decayLabel.data()));
+    hDecayChannel->GetXaxis()->SetBinLabel(5, Form("%s 2#pi^{+} 2#pi^{#minus}", decayLabel.data()));
+    hDecayChannel->GetXaxis()->SetBinLabel(6, Form("%s #pi^{+} #pi^{#minus} #pi^{0}", decayLabel.data()));
+    hDecayChannel->GetXaxis()->SetBinLabel(7, Form("%s #pi^{+} #pi^{#minus} 2#pi^{0}", decayLabel.data()));
+    hDecayChannel->GetXaxis()->SetBinLabel(8, Form("%s 2#pi^{+} 2#pi^{#minus} #pi^{0}", decayLabel.data()));
+    hDecayChannel->GetXaxis()->SetBinLabel(9, Form("%s 2#pi^{+} 2#pi^{#minus} 2#pi^{0}", decayLabel.data()));
+    hDecayChannel->GetXaxis()->SetBinLabel(10, Form("%s #pi^{#minus}", decayLabelN.data()));
+    hDecayChannel->GetXaxis()->SetBinLabel(11, Form("%s #pi^{#minus} #pi^{0}", decayLabelN.data()));
+    hDecayChannel->GetXaxis()->SetBinLabel(12, Form("%s #pi^{#minus} 2#pi^{0}", decayLabelN.data()));
+    hDecayChannel->GetXaxis()->SetBinLabel(13, Form("%s 2#pi^{#minus} #pi^{+}", decayLabelN.data()));
+    hDecayChannel->GetXaxis()->SetBinLabel(14, Form("%s 2#pi^{#minus} #pi^{+} #pi^{0}", decayLabelN.data()));
+    hDecayChannel->GetXaxis()->SetBinLabel(15, Form("%s 2#pi^{#minus} #pi^{+} 2#pi^{0}", decayLabelN.data()));
+    hDecayChannel->GetXaxis()->SetBinLabel(16, "other");
 
     TH1F* hFONLLLb = ReadFONLLVsPt(FONLLFileName, kCentral, 0.025, 0.05, 2001);
     hFONLLLb->Scale(0.816); // f(b->B) from e+e- provides good normalisation for LHCb and CMS B-meson measurements
@@ -197,12 +225,12 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
     TH2F* hPtLbVsHe3FromLb = new TH2F("hPtLbVsHe3FromLb", ";#it{p}_{T}(#Lambda_{b}^{0}) (GeV/#it{c});#it{p}_{T}(^{3}He) (GeV/#it{c})", 1000, 0., 100., 500., 0., 50.);
 
     std::vector<double> pxDau, pyDau, pzDau, ptDau;
-    std::vector<int> pdgDau, labDau;
+    std::vector<int> pdgDau, pdgDauAll, statusDauAll, labDau;
     double pxLb, pyLb, pzLb, ptLb;
 
     int pdgHb = 5122;
     double massLb = TDatabasePDG::Instance()->GetParticle(pdgHb)->Mass();
-    int nEventSel = 0;
+    int nEventSel = 0, nCoalesced = 0;
     for (int iEvent = 0; iEvent < nEvents; ++iEvent)
     {
         ptLb = hFONLLLb->GetRandom();
@@ -254,6 +282,8 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
             }
             else 
             {
+                pdgDauAll.push_back(pythia.event.at(iPart).id());
+                statusDauAll.push_back(pythia.event.at(iPart).status());
                 double prodR = TMath::Sqrt(pythia.event.at(iPart).xProd()*pythia.event.at(iPart).xProd() + pythia.event.at(iPart).yProd()*pythia.event.at(iPart).yProd() + pythia.event.at(iPart).zProd()*pythia.event.at(iPart).zProd());
                 if(TMath::Abs(prodR-decLen) > coalRadius) {
                     nSkipped++;
@@ -272,7 +302,7 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
             pzDau.push_back(pz);
             pdgDau.push_back(pythia.event.at(iPart).id());
             labDau.push_back(iPart-nSkipped);
-            
+
             if(pdgDau[iPart-2] == 2212)
                 nProtons++;
             else if(pdgDau[iPart-2] == 2112)
@@ -318,6 +348,45 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
                 if(TMath::Abs(yHe3) < 0.5) {
                     hHe3FromLb->Fill(ptHe3);
                     hPtLbVsHe3FromLb->Fill(ptLb, ptHe3);
+                    auto nParticles = CountNumberOfDaughters(pdgDauAll, statusDauAll);
+                    if(nParticles[3] == 2)
+                    {
+                        if(nParticles[0] == 0 && nParticles[1] == 0 && nParticles[2] == 0)
+                            hDecayChannel->Fill(1);
+                        else if(nParticles[0] == 1 && nParticles[1] == 0 && nParticles[2] == 0)
+                            hDecayChannel->Fill(2);
+                        else if(nParticles[0] == 2 && nParticles[1] == 0 && nParticles[2] == 0)
+                            hDecayChannel->Fill(3);
+                        else if(nParticles[0] == 0 && nParticles[1] == 1 && nParticles[2] == 1)
+                            hDecayChannel->Fill(4);
+                        else if(nParticles[0] == 0 && nParticles[1] == 2 && nParticles[2] == 2)
+                            hDecayChannel->Fill(5);
+                        else if(nParticles[0] == 1 && nParticles[1] == 1 && nParticles[2] == 1)
+                            hDecayChannel->Fill(6);
+                        else if(nParticles[0] == 2 && nParticles[1] == 1 && nParticles[2] == 1)
+                            hDecayChannel->Fill(7);
+                        else if(nParticles[0] == 1 && nParticles[1] == 2 && nParticles[2] == 2)
+                            hDecayChannel->Fill(8);
+                        else if(nParticles[0] == 2 && nParticles[1] == 2 && nParticles[2] == 2)
+                            hDecayChannel->Fill(9);
+                    }
+                    else if(nParticles[3] == 1 && nParticles[4] == 1)
+                    {
+                        if(nParticles[0] == 0 && nParticles[1] == 0 && nParticles[2] == 1)
+                            hDecayChannel->Fill(10);
+                        else if(nParticles[0] == 1 && nParticles[1] == 0 && nParticles[2] == 1)
+                            hDecayChannel->Fill(11);
+                        else if(nParticles[0] == 2 && nParticles[1] == 0 && nParticles[2] == 1)
+                            hDecayChannel->Fill(12);
+                        else if(nParticles[0] == 0 && nParticles[1] == 1 && nParticles[2] == 2)
+                            hDecayChannel->Fill(13);
+                        else if(nParticles[0] == 1 && nParticles[1] == 1 && nParticles[2] == 2)
+                            hDecayChannel->Fill(14);
+                        else if(nParticles[0] == 2 && nParticles[1] == 1 && nParticles[2] == 2)
+                            hDecayChannel->Fill(15);
+                    }
+                    else 
+                        hDecayChannel->Fill(16);
                 }
 
                 Particle He3;
@@ -343,9 +412,12 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
                 pythia.event.append(He3);
 
                 // write HepMC
-                HepMC3::GenEvent hepmcevt;
-                ToHepMC.fill_next_event(pythia.event, &hepmcevt, -1, &pythia.info);
-                outFileHepMC.write_event(hepmcevt);
+                if(outputHepMC) {
+                    HepMC3::GenEvent hepmcevt;
+                    ToHepMC.fill_next_event(pythia.event, &hepmcevt, -1, &pythia.info);
+                    outFileHepMC.write_event(hepmcevt);
+                }
+                nCoalesced++;
             }
             nEventSel++;
         }
@@ -355,19 +427,92 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
         pyDau.clear();
         pzDau.clear();
         pdgDau.clear();
+        pdgDauAll.clear();
+        statusDauAll.clear();
     }
     outFileHepMC.close();
 
     hBR->SetBinContent(2, static_cast<double>(nEventSel) / nEvents);
+    hBR->SetBinContent(3, static_cast<double>(nCoalesced) / nEventSel);
     hHe3FromLb->Scale(hFONLLLb->Integral() / nEventSel * hBR->GetBinContent(1) * hBR->GetBinContent(2));
+    hDecayChannel->Scale(hBR->GetBinContent(1) * hBR->GetBinContent(2) * hBR->GetBinContent(3) / hDecayChannel->Integral());
 
     // Save histogram on file and close file.
-    TFile outFile(outFileNameRoot.data(), "recreate");
-    outFile.cd();
-    hFONLLLb->Write();
-    hHe3FromLb->Write();
-    hBR->Write();
-    outFile.Close();
+    if(outputRoot) {
+        TFile outFile(outFileNameRoot.data(), "recreate");
+        outFile.cd();
+        hFONLLLb->Write();
+        hHe3FromLb->Write();
+        hBR->Write();
+        hDecayChannel->Write();
+        outFile.Close();
+    }
+}
+
+//__________________________________________________________________________________________________
+bool SimpleCoalescence(double p1[3], double p2[3], double p3[3], double pHe3[3], double pc) {
+
+    // returns true if coalescence is realised, false otherwise
+    TLorentzVector Ptrack1, Ptrack2, Ptrack3, trackSum, Ptrack1CMS, Ptrack2CMS, Ptrack3CMS;
+    Ptrack1.SetXYZM(p1[0], p1[1], p1[2], TDatabasePDG::Instance()->GetParticle(2212)->Mass());
+    Ptrack2.SetXYZM(p2[0], p2[1], p2[2], TDatabasePDG::Instance()->GetParticle(2212)->Mass());
+    Ptrack3.SetXYZM(p3[0], p3[1], p3[2], TDatabasePDG::Instance()->GetParticle(2112)->Mass());
+    trackSum = Ptrack1 + Ptrack2 + Ptrack3;
+
+    double beta = trackSum.Beta();
+    double betax = beta * cos(trackSum.Phi()) * sin(trackSum.Theta());
+    double betay = beta * sin(trackSum.Phi()) * sin(trackSum.Theta());
+    double betaz = beta * cos(trackSum.Theta());
+
+    Ptrack1CMS = Ptrack1;
+    Ptrack2CMS = Ptrack2;
+    Ptrack3CMS = Ptrack3;
+
+    Ptrack1CMS.Boost(-betax, -betay, -betaz);
+    Ptrack2CMS.Boost(-betax, -betay, -betaz);
+    Ptrack3CMS.Boost(-betax, -betay, -betaz);
+
+    double coalRadius = TMath::Power(2, 1./6) * pc / 2;
+    if(Ptrack1CMS.P() <= coalRadius && Ptrack2CMS.P() <= coalRadius && Ptrack3CMS.P() <= coalRadius)
+    {
+        for(int iEl=0; iEl<3; iEl++)
+            pHe3[iEl] = p1[iEl] + p2[iEl] + p3[iEl];
+        return true;
+    }
+
+    for(int iEl=0; iEl<3; iEl++)
+        pHe3[0] = -1.;
+    return false;
+}
+
+
+//__________________________________________________________________________________________________
+std::array<int, 5> CountNumberOfDaughters(std::vector<int> pdg, std::vector<int> status)
+{
+    std::array<int, 5> nPart = {0, 0, 0};
+    for(size_t iPart=0; iPart<pdg.size(); iPart++) {
+        if(status[iPart] == 91) {
+            switch(pdg[iPart])
+            {
+                case -211:
+                    nPart[1]++;
+                break;
+                case 211:
+                    nPart[2]++;
+                break;
+                case -2212:
+                    nPart[3]++;
+                break;
+                case -2112:
+                    nPart[4]++;
+                break;
+            }
+        }
+        else if(status[iPart] == -91 && pdg[iPart] == 111)
+            nPart[0]++;
+    }
+
+    return nPart;
 }
 
 //__________________________________________________________________________________________________
@@ -430,40 +575,4 @@ TH1F* ReadFONLLVsPt(std::string txtFileName, int whichPred, double ptMin, double
     inSet.close();
 
     return hFONLL;
-}
-
-//__________________________________________________________________________________________________
-bool SimpleCoalescence(double p1[3], double p2[3], double p3[3], double pHe3[3], double pc) {
-
-    // returns true if coalescence is realised, false otherwise
-    TLorentzVector Ptrack1, Ptrack2, Ptrack3, trackSum, Ptrack1CMS, Ptrack2CMS, Ptrack3CMS;
-    Ptrack1.SetXYZM(p1[0], p1[1], p1[2], TDatabasePDG::Instance()->GetParticle(2212)->Mass());
-    Ptrack2.SetXYZM(p2[0], p2[1], p2[2], TDatabasePDG::Instance()->GetParticle(2212)->Mass());
-    Ptrack3.SetXYZM(p3[0], p3[1], p3[2], TDatabasePDG::Instance()->GetParticle(2112)->Mass());
-    trackSum = Ptrack1 + Ptrack2 + Ptrack3;
-
-    double beta = trackSum.Beta();
-    double betax = beta * cos(trackSum.Phi()) * sin(trackSum.Theta());
-    double betay = beta * sin(trackSum.Phi()) * sin(trackSum.Theta());
-    double betaz = beta * cos(trackSum.Theta());
-
-    Ptrack1CMS = Ptrack1;
-    Ptrack2CMS = Ptrack2;
-    Ptrack3CMS = Ptrack3;
-
-    Ptrack1CMS.Boost(-betax, -betay, -betaz);
-    Ptrack2CMS.Boost(-betax, -betay, -betaz);
-    Ptrack3CMS.Boost(-betax, -betay, -betaz);
-
-    double coalRadius = TMath::Power(2, 1./6) * pc / 2;
-    if(Ptrack1CMS.P() <= coalRadius && Ptrack2CMS.P() <= coalRadius && Ptrack3CMS.P() <= coalRadius)
-    {
-        for(int iEl=0; iEl<3; iEl++)
-            pHe3[iEl] = p1[iEl] + p2[iEl] + p3[iEl];
-        return true;
-    }
-
-    for(int iEl=0; iEl<3; iEl++)
-        pHe3[0] = -1.;
-    return false;
 }
