@@ -1,3 +1,5 @@
+#define __HEPMC2__ //__HEPMC2__ or __HEPMC3__
+
 #if !defined(__CINT__) || defined(__MAKECINT__)
 
 #include <array>
@@ -21,7 +23,14 @@
 #include <TLorentzVector.h>
 
 #include "Pythia8/Pythia.h"
+
+#ifdef __HEPMC2__
+#include "Pythia8Plugins/HepMC2.h"
+#endif
+
+#ifdef __HEPMC3__
 #include "Pythia8Plugins/HepMC3.h"
+#endif
 
 #endif
 
@@ -166,9 +175,15 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
     //__________________________________________________________
     // perform the simulation
 
-    // define HepMC output
+#ifdef __HEPMC2__
+    HepMC::Pythia8ToHepMC ToHepMC;
+    HepMC::IO_GenEvent ascii_io(outFileNameHepMC.data(), std::ios::out);
+#endif
+#ifdef __HEPMC3__
+    define HepMC output
     HepMC3::WriterAscii outFileHepMC(outFileNameHepMC);
     HepMC3::Pythia8ToHepMC3 ToHepMC;
+#endif
 
     // define histograms
     TH1F* hBR = new TH1F("hBR", ";;BR", 3, 0.5, 3.5);
@@ -251,6 +266,7 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
         Hb.xProd(0.);
         Hb.yProd(0.);
         Hb.zProd(0.);
+        Hb.tProd(0.);
         Hb.e(ELb);
         Hb.px(pxLb);
         Hb.py(pyLb);
@@ -308,7 +324,6 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
             else if(pdgDau[iPart-2] == 2112)
                 nNeutrons++;
         }
-
         if(nProtons >= 2 && nNeutrons >= 1)
         {
             double pCoal1[3], pCoal2[3], pCoal3[3];
@@ -374,15 +389,15 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
                     {
                         if(nParticles[0] == 0 && nParticles[1] == 0 && nParticles[2] == 1)
                             hDecayChannel->Fill(10);
-                        else if(nParticles[0] == 1 && nParticles[1] == 0 && nParticles[2] == 1)
+                        else if(nParticles[0] == 1 && nParticles[1] == 1 && nParticles[2] == 0)
                             hDecayChannel->Fill(11);
-                        else if(nParticles[0] == 2 && nParticles[1] == 0 && nParticles[2] == 1)
+                        else if(nParticles[0] == 2 && nParticles[1] == 1 && nParticles[2] == 0)
                             hDecayChannel->Fill(12);
-                        else if(nParticles[0] == 0 && nParticles[1] == 1 && nParticles[2] == 2)
+                        else if(nParticles[0] == 0 && nParticles[1] == 2 && nParticles[2] == 1)
                             hDecayChannel->Fill(13);
-                        else if(nParticles[0] == 1 && nParticles[1] == 1 && nParticles[2] == 2)
+                        else if(nParticles[0] == 1 && nParticles[1] == 2 && nParticles[2] == 1)
                             hDecayChannel->Fill(14);
-                        else if(nParticles[0] == 2 && nParticles[1] == 1 && nParticles[2] == 2)
+                        else if(nParticles[0] == 2 && nParticles[1] == 2 && nParticles[2] == 1)
                             hDecayChannel->Fill(15);
                     }
                     else 
@@ -413,9 +428,17 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
 
                 // write HepMC
                 if(outputHepMC) {
+#ifdef __HEPMC3__
                     HepMC3::GenEvent hepmcevt;
                     ToHepMC.fill_next_event(pythia.event, &hepmcevt, -1, &pythia.info);
                     outFileHepMC.write_event(hepmcevt);
+#endif
+#ifdef __HEPMC2__
+                    HepMC::GenEvent *hepmcevt = new HepMC::GenEvent();
+                    ToHepMC.fill_next_event(pythia, hepmcevt);
+                    ascii_io << hepmcevt;
+                    delete hepmcevt;
+#endif
                 }
                 nCoalesced++;
             }
@@ -430,7 +453,9 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
         pdgDauAll.clear();
         statusDauAll.clear();
     }
+#ifdef __HEPMC3__
     outFileHepMC.close();
+#endif
 
     hBR->SetBinContent(2, static_cast<double>(nEventSel) / nEvents);
     hBR->SetBinContent(3, static_cast<double>(nCoalesced) / nEventSel);
@@ -445,6 +470,7 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
         hHe3FromLb->Write();
         hBR->Write();
         hDecayChannel->Write();
+        hPtLbVsHe3FromLb->Write();
         outFile.Close();
     }
 }
@@ -489,7 +515,7 @@ bool SimpleCoalescence(double p1[3], double p2[3], double p3[3], double pHe3[3],
 //__________________________________________________________________________________________________
 std::array<int, 5> CountNumberOfDaughters(std::vector<int> pdg, std::vector<int> status)
 {
-    std::array<int, 5> nPart = {0, 0, 0};
+    std::array<int, 5> nPart = {0, 0, 0, 0, 0};
     for(size_t iPart=0; iPart<pdg.size(); iPart++) {
         if(status[iPart] == 91) {
             switch(pdg[iPart])

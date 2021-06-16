@@ -4,7 +4,7 @@ decay:
 
 generator:
     process: SoftQCD
-    tune: CRMode2
+    tune: Monash
 
 coalescence:
     radius: 1.e-9 # mm
@@ -15,4 +15,4 @@ FONLL:
 
 output:
     root: true
-    hepmc: true
+    hepmc: false

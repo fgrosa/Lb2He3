@@ -1,3 +1,5 @@
+#define __HEPMC2__ //__HEPMC2__ or __HEPMC3__
+
 #if !defined(__CINT__) || defined(__MAKECINT__)
 
 #include <array>
@@ -6,8 +8,6 @@
 #include <sstream>
 #include <string>
 #include <vector>
-
-#include "yaml-cpp/yaml.h"
 
 #include <TFile.h>
 #include <TROOT.h>
@@ -19,7 +19,14 @@
 #include <TSystem.h>
 
 #include "Pythia8/Pythia.h"
+
+#ifdef __HEPMC2__
+#include "Pythia8Plugins/HepMC2.h"
+#endif
+
+#ifdef __HEPMC3__
 #include "Pythia8Plugins/HepMC3.h"
+#endif
 
 #endif
 
@@ -55,8 +62,15 @@ void SimulatePrimary3He(int system, int nEvents, std::string outFileNameRoot, st
     pythia.init();
 
     // define HepMC output
+#ifdef __HEPMC2__
+    HepMC::Pythia8ToHepMC ToHepMC;
+    HepMC::IO_GenEvent ascii_io(outFileNameHepMC.data(), std::ios::out);
+#endif
+#ifdef __HEPMC3__
+    define HepMC output
     HepMC3::WriterAscii outFileHepMC(outFileNameHepMC);
     HepMC3::Pythia8ToHepMC3 ToHepMC;
+#endif
 
     // define input pT shape
     TF1* fPtShape = nullptr;
@@ -117,13 +131,23 @@ void SimulatePrimary3He(int system, int nEvents, std::string outFileNameRoot, st
         pythia.event.remove(2, pythia.event.size()-2);
 
         // write HepMC
-        HepMC3::GenEvent hepmcevt;
-        ToHepMC.fill_next_event(pythia.event, &hepmcevt, -1, &pythia.info);
-        outFileHepMC.write_event(hepmcevt);
+#ifdef __HEPMC3__
+                    HepMC3::GenEvent hepmcevt;
+                    ToHepMC.fill_next_event(pythia.event, &hepmcevt, -1, &pythia.info);
+                    outFileHepMC.write_event(hepmcevt);
+#endif
+#ifdef __HEPMC2__
+                    HepMC::GenEvent *hepmcevt = new HepMC::GenEvent();
+                    ToHepMC.fill_next_event(pythia, hepmcevt);
+                    ascii_io << hepmcevt;
+                    delete hepmcevt;
+#endif
     }
+#ifdef __HEPMC3__
     outFileHepMC.close();
-    hPrimary3He->Scale(sigmaV0/nEvents);
+#endif
 
+    hPrimary3He->Scale(sigmaV0/nEvents);
     // Save histogram on file and close file.
     TFile outFile(outFileNameRoot.data(), "recreate");
     outFile.cd();
