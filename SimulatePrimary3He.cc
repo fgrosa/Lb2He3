@@ -41,10 +41,10 @@ enum syst
 };
 
 //__________________________________________________________________________________________________
-void SimulatePrimary3He(int system=kpp13TeV, int nEvents=1000000, std::string outFileNameRoot="AnalysisResults.root", std::string outFileNameHepMC="AnalysisResults.hepmc", int seed=42);
+void SimulatePrimary3He(int system=kpp13TeV, int nEvents=1000000, double yMin=-0.5, double yMax=0.5, std::string outFileNameRoot="AnalysisResults.root", std::string outFileNameHepMC="AnalysisResults.hepmc", int seed=42);
 
 //__________________________________________________________________________________________________
-void SimulatePrimary3He(int system, int nEvents, std::string outFileNameRoot, std::string outFileNameHepMC, int seed)
+void SimulatePrimary3He(int system, int nEvents, double yMin, double yMax, std::string outFileNameRoot, std::string outFileNameHepMC, int seed)
 {
 
     //__________________________________________________________
@@ -79,7 +79,8 @@ void SimulatePrimary3He(int system, int nEvents, std::string outFileNameRoot, st
     {
         TFile* inFileSpectrum = TFile::Open("inputs/heliumSpectra_pp13TeV.root");
         fPtShape = (TF1*)inFileSpectrum->Get("fCombineHeliumSpecLevyFit_0-100");
-        sigmaV0 = 58.7e9 * fPtShape->Integral(0, 100);
+        fPtShape->SetRange(0., 100.);
+        sigmaV0 = 57.8e9 * fPtShape->Integral(0, 100) * (yMax-yMin); // assuming flat y distribution --> conservative
     }
     fPtShape->SetName("fPrimary3He");
 
@@ -96,7 +97,7 @@ void SimulatePrimary3He(int system, int nEvents, std::string outFileNameRoot, st
 
         ptHe3 = fPtShape->GetRandom(); // to be substitute with TSallis or BlastWave 
         double phiHe3 = gRandom->Rndm() * 2 * TMath::Pi();
-        double yHe3 = gRandom->Rndm() - 0.5; // flat in -0.5<y<0.5
+        double yHe3 = yMin + gRandom->Rndm() * (yMax-yMin); // flat in [yMin, yMax]
         pxHe3 = ptHe3 * TMath::Cos(phiHe3);
         pyHe3 = ptHe3 * TMath::Sin(phiHe3);
         double mt = TMath::Sqrt(massHe3 * massHe3 + ptHe3 * ptHe3);

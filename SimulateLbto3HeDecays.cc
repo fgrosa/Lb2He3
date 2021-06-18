@@ -53,7 +53,10 @@ enum FONLLPred {
 void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents=1000000, std::string outFileNameRoot="AnalysisResults.root", std::string outFileNameHepMC="AnalysisResults.hepmc", int seed=42);
 bool SimpleCoalescence(double p1[3], double p2[3], double p3[3], double pHe3[3], double pc = 0.2 /* GeV/c */);
 std::array<int, 5> CountNumberOfDaughters(std::vector<int> pdg, std::vector<int> status);
-TH1F* ReadFONLLVsPt(std::string txtFileName, int whichPred, double ptMin, double binWidth, int nBins);
+TH1F* ReadFONLL(std::string txtFileName, int whichPred, double varMin, double binWidth, int nBins, std::string var = "pt");
+
+template <typename T>
+int findPtBin(std::vector<T> binMins, std::vector<T> binMaxs, T value);
 
 //__________________________________________________________________________________________________
 void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string outFileNameRoot, std::string outFileNameHepMC, int seed)
@@ -74,11 +77,30 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
 
     std::string process = config["generator"]["process"].as<std::string>();
     std::string tune = config["generator"]["process"].as<std::string>();
-    std::string FONLLFileName = config["FONLL"]["filename"].as<std::string>();
+
+    std::string FONLLPtFileName = config["FONLL"]["pt"]["filename"].as<std::string>();
+    double ptMinFONLL = config["FONLL"]["pt"]["ptmin"].as<double>();
+    double ptMaxFONLL = config["FONLL"]["pt"]["ptmax"].as<double>();
+    int ptBinsFONLL = config["FONLL"]["pt"]["ptbins"].as<int>();
+    std::vector<std::string> FONLLyFileNames = config["FONLL"]["y"]["filenames"].as<std::vector<std::string>>();
+    std::vector<double> FONLLyPtMins = config["FONLL"]["y"]["ptmins"].as<std::vector<double>>();
+    std::vector<double> FONLLyPtMaxs = config["FONLL"]["y"]["ptmaxs"].as<std::vector<double>>();
+    double yMinFONLL = config["FONLL"]["y"]["ymin"].as<double>();
+    double yMaxFONLL = config["FONLL"]["y"]["ymax"].as<double>();
+    int yBinsFONLL = config["FONLL"]["y"]["ybins"].as<int>();
+
     double coalRadius = config["coalescence"]["radius"].as<double>();
     double coalMomRadius = config["coalescence"]["momentum_radius"].as<double>();
     bool outputRoot = config["output"]["root"].as<bool>();
     bool outputHepMC = config["output"]["hepmc"].as<bool>();
+    double yMin = config["acceptance"]["ymin"].as<double>();
+    double yMax = config["acceptance"]["ymax"].as<double>();
+
+    if (FONLLyFileNames.size() != FONLLyPtMins.size() || FONLLyFileNames.size() != FONLLyPtMaxs.size())
+    {
+        std::cerr << "\033[31mERROR: inputs for FONLL dsigma/dy not consistent! Exit\033[0m" << std::endl;
+        return;
+    }
 
     //__________________________________________________________
     // create and configure pythia generator
@@ -186,13 +208,13 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
 #endif
 
     // define histograms
-    TH1F* hBR = new TH1F("hBR", ";;BR", 3, 0.5, 3.5);
+    auto hBR = new TH1F("hBR", ";;BR", 3, 0.5, 3.5);
     hBR->GetXaxis()->SetBinLabel(1, "#Lambda_{b}^{0} #rightarrow d#bar{u}d (ud)_{0}");
     hBR->GetXaxis()->SetBinLabel(2, "#Lambda_{b}^{0} #rightarrow (>=2)p + (>=1)n / #Lambda_{b}^{0} #rightarrow d#bar{u}d (ud)_{0}");
     hBR->GetXaxis()->SetBinLabel(3, "#Lambda_{b}^{0} #rightarrow ^{3}He + X / #Lambda_{b}^{0} #rightarrow (>=2)p + (>=1)n");
     hBR->SetBinContent(1, 0.0120000);
 
-    TH1F* hDecayChannel = new TH1F("hDecayChannel", "BR", 16, 0.5, 16.5);
+    auto hDecayChannel = new TH1F("hDecayChannel", "BR", 16, 0.5, 16.5);
     std::string decayLabel = "^{3}He 2#bar{p}";
     std::string decayLabelN = "^{3}He #bar{p} #bar{n}";
     hDecayChannel->GetXaxis()->SetBinLabel(1, Form("%s", decayLabel.data()));
@@ -212,9 +234,20 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
     hDecayChannel->GetXaxis()->SetBinLabel(15, Form("%s 2#pi^{#minus} #pi^{+} 2#pi^{0}", decayLabelN.data()));
     hDecayChannel->GetXaxis()->SetBinLabel(16, "other");
 
-    TH1F* hFONLLLb = ReadFONLLVsPt(FONLLFileName, kCentral, 0.025, 0.05, 2001);
-    hFONLLLb->Scale(0.816); // f(b->B) from e+e- provides good normalisation for LHCb and CMS B-meson measurements
-    hFONLLLb->SetNameTitle("hFONLLLb_y1", ";#it{p}_{T} (GeV/#it{c});d#sigma/d#it{p}_{T} (pb GeV^{-1} #it{c})");
+    auto hFONLLLbVsPt = ReadFONLL(FONLLPtFileName, kCentral, ptMinFONLL, (ptMaxFONLL-ptMinFONLL)/ptBinsFONLL, ptBinsFONLL);
+    hFONLLLbVsPt->Scale(0.816); // f(b->B) from e+e- provides good normalisation for LHCb and CMS B-meson measurements
+    hFONLLLbVsPt->SetNameTitle(Form("hFONLLLbVsPt_y_%.1f_%.1f", yMinFONLL, yMaxFONLL), Form(";#it{p}_{T} (GeV/#it{c});d#sigma/d#it{p}_{T}|_{%.1f < #it{y} < %.1f} (pb GeV^{-1} #it{c})", yMinFONLL, yMaxFONLL));
+
+    std::vector<TH1F*> hFONLLLbVsY{};
+    for(size_t iPt=0; iPt<FONLLyPtMins.size(); iPt++)
+    {
+        hFONLLLbVsY.push_back(ReadFONLL(FONLLyFileNames[iPt], kCentral, yMinFONLL, (yMaxFONLL-yMinFONLL)/yBinsFONLL, yBinsFONLL, "y"));
+        hFONLLLbVsY[iPt]->SetNameTitle(Form("hFONLLLbVsY_pT_%.0f_%.0f", FONLLyPtMins[iPt], FONLLyPtMaxs[iPt]), ";#it{y};d#sigma/d#it{y} (pb)");
+    }
+
+    auto hLbDecayLengthVsPt = new TH2F("hLbDecayLengthVsPt", ";#it{p}_{T} (GeV/#it{c});decay length (#mum)", 2000, 0., 100., 1000, 0., 10000.);
+    auto hHe3ProdVtxVsLbPt = new TH2F("hHe3ProdVtxVsLbPt", ";#it{p}_{T}(#Lambda_{b}^{0}) (GeV/#it{c});^{3}He prod vtx (#mum)", 2000, 0., 100., 1000, 0., 10000.);
+    auto hHe3ProdVtxVsHe3Pt = new TH2F("hHe3ProdVtxVsHe3Pt", ";#it{p}_{T}(#Lambda_{b}^{0}) (GeV/#it{c});^{3}He prod vtx (#mum)", 1000, 0., 50., 1000, 0., 10000.);
 
     // f(b -> Lb) / f(b -> B) from LHCb measurement https://arxiv.org/pdf/1902.06794.pdf
     TF1* fFFLHCb = new TF1("fracLb","([4] * ([5] + exp([6] + [7] * x))) /  (([0] * ([1] + [2] * (x - [3])))  + ([4] * ([5] + exp([6] + [7] * x))) + 1)  ", 0, 50);
@@ -228,16 +261,18 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
     double parBsAvePt = 10.1;
     fFFLHCb->SetParameters(parBsA, parBsp1, parBsp2, parBsAvePt, parLbA, parLbp1, parLbp2, parLbp3);
 
-    for(int iPt=1; iPt<hFONLLLb->GetNbinsX()+1; iPt++)
+    for(int iPt=1; iPt<hFONLLLbVsPt->GetNbinsX()+1; iPt++)
     {
-        double ptCent = hFONLLLb->GetBinCenter(iPt);
-        hFONLLLb->SetBinContent(iPt, hFONLLLb->GetBinContent(iPt) * fFFLHCb->Eval(ptCent>5 ? ptCent:5));
+        double ptCent = hFONLLLbVsPt->GetBinCenter(iPt);
+        hFONLLLbVsPt->SetBinContent(iPt, hFONLLLbVsPt->GetBinContent(iPt) * fFFLHCb->Eval(ptCent>5 ? ptCent:5));
     }
 
-    TH1F* hHe3FromLb = (TH1F*)hFONLLLb->Clone("hHe3FromLb_y05");
+    auto hHe3FromLb = (TH1F*)hFONLLLbVsPt->Clone("hHe3FromLb_y05");
     hHe3FromLb->Reset();
 
-    TH2F* hPtLbVsHe3FromLb = new TH2F("hPtLbVsHe3FromLb", ";#it{p}_{T}(#Lambda_{b}^{0}) (GeV/#it{c});#it{p}_{T}(^{3}He) (GeV/#it{c})", 1000, 0., 100., 500., 0., 50.);
+    auto hPtLbVsHe3FromLb = new TH2F("hPtLbVsHe3FromLb", ";#it{p}_{T}(#Lambda_{b}^{0}) (GeV/#it{c});#it{p}_{T}(^{3}He) (GeV/#it{c})", 1000, 0., 100., 500., 0., 50.);
+    auto hYLbVsHe3FromLb = new TH2F("hYLbVsHe3FromLb", ";#it{y}(^{3}He);#it{y}(^{3}He)", 100, -5., 5., 100., -5., 5.);
+    auto hLbPtVsY = new TH2F("hLbPtVsY", ";#it{p}_{T} (GeV/#it{c});#it{y})", 1000, 0., 100., 100., -5., 5.);
 
     std::vector<double> pxDau, pyDau, pzDau, ptDau;
     std::vector<int> pdgDau, pdgDauAll, statusDauAll, labDau;
@@ -248,9 +283,10 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
     int nEventSel = 0, nCoalesced = 0;
     for (int iEvent = 0; iEvent < nEvents; ++iEvent)
     {
-        ptLb = hFONLLLb->GetRandom();
+        ptLb = hFONLLLbVsPt->GetRandom();
+        int iPtForY = findPtBin(FONLLyPtMins, FONLLyPtMaxs, ptLb);
+        double yLb = hFONLLLbVsY[iPtForY]->GetRandom();
         double phiLb = gRandom->Rndm() * 2 * TMath::Pi();
-        double yLb = gRandom->Rndm() * 2. - 1.; // flat in -1<y<1
         pxLb = ptLb * TMath::Cos(phiLb);
         pyLb = ptLb * TMath::Sin(phiLb);
         double mt = TMath::Sqrt(massLb * massLb + ptLb * ptLb);
@@ -274,8 +310,9 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
         Hb.tau(4.41000e-01); // PDG2020
 
         pythia.event.reset();
+        pythia.event.append(21, 11, 0, 0, 0, 0, 0, 0, 0., 0., 0., 0., 0.); //add a dummy gluon to make hepmc happy
         pythia.event.append(Hb);
-        int idPart = pythia.event[0].id();
+        int idPart = pythia.event[2].id();
         pythia.particleData.mayDecay(idPart, true);
         pythia.moreDecays();
 
@@ -286,17 +323,18 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
         double decVtx[4] = {0., 0., 0., 0.};
         double decLen = 0.;
         int nSkipped = 0;
-        for (int iPart = 2; iPart < pythia.event.size(); iPart++)
+        for (int iPart = 3; iPart < pythia.event.size(); iPart++)
         {
-            if(iPart == 2)
+            if(iPart == 3)
             {
                 decVtx[0] = pythia.event.at(iPart).xProd();
                 decVtx[1] = pythia.event.at(iPart).yProd();
                 decVtx[2] = pythia.event.at(iPart).zProd();
                 decVtx[3] = pythia.event.at(iPart).tProd();
                 decLen = TMath::Sqrt(decVtx[0]*decVtx[0] + decVtx[1]*decVtx[1] + decVtx[2]*decVtx[2]);
+                hLbDecayLengthVsPt->Fill(ptLb, decLen*1000);
             }
-            else 
+            else
             {
                 pdgDauAll.push_back(pythia.event.at(iPart).id());
                 statusDauAll.push_back(pythia.event.at(iPart).status());
@@ -319,9 +357,9 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
             pdgDau.push_back(pythia.event.at(iPart).id());
             labDau.push_back(iPart-nSkipped);
 
-            if(pdgDau[iPart-2] == 2212)
+            if(pdgDau[iPart-3] == 2212)
                 nProtons++;
-            else if(pdgDau[iPart-2] == 2112)
+            else if(pdgDau[iPart-3] == 2112)
                 nNeutrons++;
         }
         if(nProtons >= 2 && nNeutrons >= 1)
@@ -359,49 +397,52 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
                 double ptHe3 = TMath::Sqrt(pCoalHe3[0]*pCoalHe3[0] + pCoalHe3[1]*pCoalHe3[1]);
                 double pHe3 = TMath::Sqrt(ptHe3*ptHe3 + pCoalHe3[2]*pCoalHe3[2]);
                 double EHe3 = TMath::Sqrt(massHe3 * massHe3 + pHe3 * pHe3);
-                double yHe3 = TMath::Log((EHe3 + pCoalHe3[2]) / (EHe3 - pCoalHe3[2]));
-                if(TMath::Abs(yHe3) < 0.5) {
+                double yHe3 = TMath::Log((EHe3 + pCoalHe3[2]) / (EHe3 - pCoalHe3[2])) / 2;
+                hPtLbVsHe3FromLb->Fill(ptLb, ptHe3);
+                hYLbVsHe3FromLb->Fill(yLb, yHe3);
+
+                auto nParticles = CountNumberOfDaughters(pdgDauAll, statusDauAll);
+                if(nParticles[3] == 2)
+                {
+                    if(nParticles[0] == 0 && nParticles[1] == 0 && nParticles[2] == 0)
+                        hDecayChannel->Fill(1);
+                    else if(nParticles[0] == 1 && nParticles[1] == 0 && nParticles[2] == 0)
+                        hDecayChannel->Fill(2);
+                    else if(nParticles[0] == 2 && nParticles[1] == 0 && nParticles[2] == 0)
+                        hDecayChannel->Fill(3);
+                    else if(nParticles[0] == 0 && nParticles[1] == 1 && nParticles[2] == 1)
+                        hDecayChannel->Fill(4);
+                    else if(nParticles[0] == 0 && nParticles[1] == 2 && nParticles[2] == 2)
+                        hDecayChannel->Fill(5);
+                    else if(nParticles[0] == 1 && nParticles[1] == 1 && nParticles[2] == 1)
+                        hDecayChannel->Fill(6);
+                    else if(nParticles[0] == 2 && nParticles[1] == 1 && nParticles[2] == 1)
+                        hDecayChannel->Fill(7);
+                    else if(nParticles[0] == 1 && nParticles[1] == 2 && nParticles[2] == 2)
+                        hDecayChannel->Fill(8);
+                    else if(nParticles[0] == 2 && nParticles[1] == 2 && nParticles[2] == 2)
+                        hDecayChannel->Fill(9);
+                }
+                else if(nParticles[3] == 1 && nParticles[4] == 1)
+                {
+                    if(nParticles[0] == 0 && nParticles[1] == 0 && nParticles[2] == 1)
+                        hDecayChannel->Fill(10);
+                    else if(nParticles[0] == 1 && nParticles[1] == 1 && nParticles[2] == 0)
+                        hDecayChannel->Fill(11);
+                    else if(nParticles[0] == 2 && nParticles[1] == 1 && nParticles[2] == 0)
+                        hDecayChannel->Fill(12);
+                    else if(nParticles[0] == 0 && nParticles[1] == 2 && nParticles[2] == 1)
+                        hDecayChannel->Fill(13);
+                    else if(nParticles[0] == 1 && nParticles[1] == 2 && nParticles[2] == 1)
+                        hDecayChannel->Fill(14);
+                    else if(nParticles[0] == 2 && nParticles[1] == 2 && nParticles[2] == 1)
+                        hDecayChannel->Fill(15);
+                }
+                else 
+                    hDecayChannel->Fill(16);
+
+                if(yHe3 >= yMin && yHe3 <= yMax) {
                     hHe3FromLb->Fill(ptHe3);
-                    hPtLbVsHe3FromLb->Fill(ptLb, ptHe3);
-                    auto nParticles = CountNumberOfDaughters(pdgDauAll, statusDauAll);
-                    if(nParticles[3] == 2)
-                    {
-                        if(nParticles[0] == 0 && nParticles[1] == 0 && nParticles[2] == 0)
-                            hDecayChannel->Fill(1);
-                        else if(nParticles[0] == 1 && nParticles[1] == 0 && nParticles[2] == 0)
-                            hDecayChannel->Fill(2);
-                        else if(nParticles[0] == 2 && nParticles[1] == 0 && nParticles[2] == 0)
-                            hDecayChannel->Fill(3);
-                        else if(nParticles[0] == 0 && nParticles[1] == 1 && nParticles[2] == 1)
-                            hDecayChannel->Fill(4);
-                        else if(nParticles[0] == 0 && nParticles[1] == 2 && nParticles[2] == 2)
-                            hDecayChannel->Fill(5);
-                        else if(nParticles[0] == 1 && nParticles[1] == 1 && nParticles[2] == 1)
-                            hDecayChannel->Fill(6);
-                        else if(nParticles[0] == 2 && nParticles[1] == 1 && nParticles[2] == 1)
-                            hDecayChannel->Fill(7);
-                        else if(nParticles[0] == 1 && nParticles[1] == 2 && nParticles[2] == 2)
-                            hDecayChannel->Fill(8);
-                        else if(nParticles[0] == 2 && nParticles[1] == 2 && nParticles[2] == 2)
-                            hDecayChannel->Fill(9);
-                    }
-                    else if(nParticles[3] == 1 && nParticles[4] == 1)
-                    {
-                        if(nParticles[0] == 0 && nParticles[1] == 0 && nParticles[2] == 1)
-                            hDecayChannel->Fill(10);
-                        else if(nParticles[0] == 1 && nParticles[1] == 1 && nParticles[2] == 0)
-                            hDecayChannel->Fill(11);
-                        else if(nParticles[0] == 2 && nParticles[1] == 1 && nParticles[2] == 0)
-                            hDecayChannel->Fill(12);
-                        else if(nParticles[0] == 0 && nParticles[1] == 2 && nParticles[2] == 1)
-                            hDecayChannel->Fill(13);
-                        else if(nParticles[0] == 1 && nParticles[1] == 2 && nParticles[2] == 1)
-                            hDecayChannel->Fill(14);
-                        else if(nParticles[0] == 2 && nParticles[1] == 2 && nParticles[2] == 1)
-                            hDecayChannel->Fill(15);
-                    }
-                    else 
-                        hDecayChannel->Fill(16);
                 }
 
                 Particle He3;
@@ -421,6 +462,10 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
                 He3.daughter1(0);
                 He3.daughter2(0);
                 He3.tau(1.e9); // stable
+
+                double prodVtx = TMath::Sqrt(He3.xProd()*He3.xProd() + He3.yProd()*He3.yProd() + He3.zProd()*He3.zProd());
+                hHe3ProdVtxVsLbPt->Fill(ptLb, prodVtx*1000);
+                hHe3ProdVtxVsHe3Pt->Fill(ptHe3, prodVtx*1000);
 
                 for(int iLab=0; iLab<3; iLab++)
                     pythia.event.remove(labCoal[iLab]-iLab, labCoal[iLab]-iLab); // labels shift by 1 when removing a particle
@@ -459,18 +504,25 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
 
     hBR->SetBinContent(2, static_cast<double>(nEventSel) / nEvents);
     hBR->SetBinContent(3, static_cast<double>(nCoalesced) / nEventSel);
-    hHe3FromLb->Scale(hFONLLLb->Integral() / nEventSel * hBR->GetBinContent(1) * hBR->GetBinContent(2));
+    hHe3FromLb->Scale(hFONLLLbVsPt->Integral() / nEventSel * hBR->GetBinContent(1) * hBR->GetBinContent(2));
     hDecayChannel->Scale(hBR->GetBinContent(1) * hBR->GetBinContent(2) * hBR->GetBinContent(3) / hDecayChannel->Integral());
 
     // Save histogram on file and close file.
     if(outputRoot) {
         TFile outFile(outFileNameRoot.data(), "recreate");
         outFile.cd();
-        hFONLLLb->Write();
+        hFONLLLbVsPt->Write();
+        for(auto &histo: hFONLLLbVsY)
+            histo->Write();
         hHe3FromLb->Write();
         hBR->Write();
         hDecayChannel->Write();
         hPtLbVsHe3FromLb->Write();
+        hYLbVsHe3FromLb->Write();
+        hLbPtVsY->Write();
+        hLbDecayLengthVsPt->Write();
+        hHe3ProdVtxVsLbPt->Write();
+        hHe3ProdVtxVsHe3Pt->Write();
         outFile.Close();
     }
 }
@@ -542,30 +594,34 @@ std::array<int, 5> CountNumberOfDaughters(std::vector<int> pdg, std::vector<int>
 }
 
 //__________________________________________________________________________________________________
-TH1F* ReadFONLLVsPt(std::string txtFileName, int whichPred, double ptMin, double binWidth, int nBins)
+TH1F* ReadFONLL(std::string txtFileName, int whichPred, double varMin, double binWidth, int nBins, std::string var)
 {
     if(txtFileName.find("txt") == string::npos && txtFileName.find("dat") == string::npos && txtFileName.find("csv") == string::npos) {
-        std::cerr << "ERROR: Wrong file format! Exit." << std::endl;
+        std::cerr << "\033[31mERROR: Wrong file format! Exit.\033[0m" << std::endl;
+        return nullptr;
+    }
+    if(var.compare("pt") != 0 && var.compare("y") != 0) {
+        std::cerr << Form("\033[31mERROR: Invalid variable %s for FONLL predictions! Exit.\033[0m", var.data()) << std::endl;
         return nullptr;
     }
 
     std::ifstream inSet(txtFileName.data());
     if(!inSet) {
-        std::cerr << "ERROR: Please check if "<< txtFileName.data() << " is the right path. Exit." << std::endl;
+        std::cerr << "\033[31mERROR: Please check if "<< txtFileName.data() << " is the right path. Exit.\033[0m" << std::endl;
         return nullptr;
     }
 
     std::vector<std::string> values;
     
-    TH1F* hFONLL = new TH1F("hFONLL", "", nBins, ptMin, ptMin + nBins*binWidth);
+    auto hFONLL = new TH1F("hFONLL", "", nBins, varMin-binWidth/2, (varMin + nBins*binWidth) +binWidth/2);
     double centY = -1., minY = -1., maxY = -1.;
-    int iPt = 1;
+    int iBin = 1;
     while(!inSet.eof())
     {    
         std::vector<std::string> values;
         std::string line;
         std::getline(inSet, line);
-        if(line.find("#") != std::string::npos || line.find("pt") != std::string::npos)
+        if(line.find("#") != std::string::npos || line.find(var.data()) != std::string::npos)
             continue;
 
         size_t pos = 0;
@@ -590,15 +646,29 @@ TH1F* ReadFONLLVsPt(std::string txtFileName, int whichPred, double ptMin, double
             line = line.substr(pos + 1);
         }
         if(whichPred == kCentral)
-            hFONLL->SetBinContent(iPt, centY);
+            hFONLL->SetBinContent(iBin, centY);
         else if(whichPred == kMin)
-            hFONLL->SetBinContent(iPt, minY);
+            hFONLL->SetBinContent(iBin, minY);
         else if(whichPred == kMax)
-            hFONLL->SetBinContent(iPt, maxY);
-        iPt++;
+            hFONLL->SetBinContent(iBin, maxY);
+        iBin++;
     }
 
     inSet.close();
 
     return hFONLL;
+}
+
+
+//__________________________________________________________________________________________________
+template <typename T>
+int findPtBin(std::vector<T> binMins, std::vector<T> binMaxs, T value)
+{
+    if (value < binMins.front())
+        return 0;
+
+    if (value >= binMaxs.back()) 
+        return binMaxs.size()-1;
+
+    return std::distance(binMins.begin(), std::upper_bound(binMins.begin(), binMins.end(), value)) - 1;
 }
