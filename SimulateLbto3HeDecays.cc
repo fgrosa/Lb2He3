@@ -181,6 +181,7 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
     // keep only interesting decays, to be reweighted a posteriori
     pythia.readString("5122:onMode = off");
     pythia.readString("5122:onIfMatch = 2 1 2 2101"); // bRatio="0.0120000" dominant one according to https://arxiv.org/pdf/2006.16251.pdf
+    pythia.readString("5122:tau0=4.41000e-01"); // bRatio="0.0800000"
     // pythia.readString("5122:onIfMatch = 2 1 4 2101"); // bRatio="0.4411147"
     // pythia.readString("5122:onIfMatch = 2 4 1 2101"); // bRatio="0.0910000"
     // pythia.readString("5122:onIfMatch = 4 3 2 2101"); // bRatio="0.0120000"
@@ -245,9 +246,9 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
         hFONLLLbVsY[iPt]->SetNameTitle(Form("hFONLLLbVsY_pT_%.0f_%.0f", FONLLyPtMins[iPt], FONLLyPtMaxs[iPt]), ";#it{y};d#sigma/d#it{y} (pb)");
     }
 
-    auto hLbDecayLengthVsPt = new TH2F("hLbDecayLengthVsPt", ";#it{p}_{T} (GeV/#it{c});decay length (#mum)", 2000, 0., 100., 1000, 0., 10000.);
-    auto hHe3ProdVtxVsLbPt = new TH2F("hHe3ProdVtxVsLbPt", ";#it{p}_{T}(#Lambda_{b}^{0}) (GeV/#it{c});^{3}He prod vtx (#mum)", 2000, 0., 100., 1000, 0., 10000.);
-    auto hHe3ProdVtxVsHe3Pt = new TH2F("hHe3ProdVtxVsHe3Pt", ";#it{p}_{T}(#Lambda_{b}^{0}) (GeV/#it{c});^{3}He prod vtx (#mum)", 1000, 0., 50., 1000, 0., 10000.);
+    auto hLbDecayLengthVsPt = new TH2F("hLbDecayLengthVsPt", ";#it{p}_{T} (GeV/#it{c});decay length (#mum)", 2001, -0.025, 100., 1000, 0., 10000.);
+    auto hHe3ProdVtxVsLbPt = new TH2F("hHe3ProdVtxVsLbPt", ";#it{p}_{T}(#Lambda_{b}^{0}) (GeV/#it{c});^{3}He prod vtx (#mum)", 2001, -0.025, 100., 1000, 0., 10000.);
+    auto hHe3ProdVtxVsHe3Pt = new TH2F("hHe3ProdVtxVsHe3Pt", ";#it{p}_{T}(#Lambda_{b}^{0}) (GeV/#it{c});^{3}He prod vtx (#mum)", 1001, -0.025, 50., 1000, 0., 10000.);
 
     // f(b -> Lb) / f(b -> B) from LHCb measurement https://arxiv.org/pdf/1902.06794.pdf
     TF1* fFFLHCb = new TF1("fracLb","([4] * ([5] + exp([6] + [7] * x))) /  (([0] * ([1] + [2] * (x - [3])))  + ([4] * ([5] + exp([6] + [7] * x))) + 1)  ", 0, 50);
@@ -281,6 +282,7 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
     int pdgHb = 5122;
     double massLb = TDatabasePDG::Instance()->GetParticle(pdgHb)->Mass();
     int nEventSel = 0, nCoalesced = 0;
+    auto fDecay = new TF1("fDecay", "exp(-x/0.441)", 0., 1000.);
     for (int iEvent = 0; iEvent < nEvents; ++iEvent)
     {
         ptLb = hFONLLLbVsPt->GetRandom();
@@ -297,7 +299,7 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
         // Lb
         Particle Hb;
         Hb.id(pdgHb);
-        Hb.status(11);
+        Hb.status(81);
         Hb.m(massLb);
         Hb.xProd(0.);
         Hb.yProd(0.);
@@ -307,12 +309,11 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
         Hb.px(pxLb);
         Hb.py(pyLb);
         Hb.pz(pzLb);
-        Hb.tau(4.41000e-01); // PDG2020
+        Hb.tau(fDecay->GetRandom());
 
         pythia.event.reset();
-        pythia.event.append(21, 11, 0, 0, 0, 0, 0, 0, 0., 0., 0., 0., 0.); //add a dummy gluon to make hepmc happy
         pythia.event.append(Hb);
-        int idPart = pythia.event[2].id();
+        int idPart = pythia.event[1].id();
         pythia.particleData.mayDecay(idPart, true);
         pythia.moreDecays();
 
@@ -323,9 +324,9 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
         double decVtx[4] = {0., 0., 0., 0.};
         double decLen = 0.;
         int nSkipped = 0;
-        for (int iPart = 3; iPart < pythia.event.size(); iPart++)
+        for (int iPart = 2; iPart < pythia.event.size(); iPart++)
         {
-            if(iPart == 3)
+            if(iPart == 2)
             {
                 decVtx[0] = pythia.event.at(iPart).xProd();
                 decVtx[1] = pythia.event.at(iPart).yProd();
@@ -357,9 +358,9 @@ void SimulateLbto3HeDecays(std::string cfgFileName, int nEvents, std::string out
             pdgDau.push_back(pythia.event.at(iPart).id());
             labDau.push_back(iPart-nSkipped);
 
-            if(pdgDau[iPart-3] == 2212)
+            if(pdgDau[iPart-2] == 2212)
                 nProtons++;
-            else if(pdgDau[iPart-3] == 2112)
+            else if(pdgDau[iPart-2] == 2112)
                 nNeutrons++;
         }
         if(nProtons >= 2 && nNeutrons >= 1)
