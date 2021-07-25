@@ -1,21 +1,21 @@
 decay:
     mother: Lb
-    daughter: He3
+    daughter: H3
 
 generator:
     process: SoftQCD
     tune: CRMode2
 
 coalescence:
-    radius: 1.e-9  # mm
-    momentum_radius: 0.2  # GeV
+    radius: 1.e-9 # mm
+    momentum_radius: 0.2 # GeV
 
 acceptance:
     ymin: -1.44
     ymax: 1.44
 
 FONLL:
-    which: max  # options [central, min, max]
+    which: central  # options [central, min, max]
     pt:
         filename: inputs/FONLL-Bhadron-dsdpt-sqrts13000-vspt-100GeV-50MeVbins-y5.txt
         ptmin: 0.025
@@ -34,4 +34,4 @@ FONLL:
 
 output:
     root: true
-    hepmc: false
+    hepmc: true

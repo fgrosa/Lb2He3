@@ -7,21 +7,25 @@ generator:
     tune: CRMode2
 
 coalescence:
-    radius: 1.e-9 # mm
-    momentum_radius: 0.1 # GeV
+    radius: 1.e-9  # mm
+    momentum_radius: 0.1  # GeV
 
 acceptance:
     ymin: -1.44
     ymax: 1.44
 
 FONLL:
+    which: central  # options: [central, min, max] 
     pt:
         filename: inputs/FONLL-Bhadron-dsdpt-sqrts13000-vspt-100GeV-50MeVbins-y5.txt
         ptmin: 0.025
         ptmax: 100.025
         ptbins: 2001
     y:
-        filenames: [inputs/FONLL-Bhadron-dsdpt-sqrts13000-vsy-y5-pt0-1.txt, inputs/FONLL-Bhadron-dsdpt-sqrts13000-vsy-y5-pt0-1.txt, inputs/FONLL-Bhadron-dsdpt-sqrts13000-vsy-y5-pt5-20.txt, inputs/FONLL-Bhadron-dsdpt-sqrts13000-vsy-y5-pt20-100.txt]
+        filenames: [inputs/FONLL-Bhadron-dsdpt-sqrts13000-vsy-y5-pt0-1.txt,
+                    inputs/FONLL-Bhadron-dsdpt-sqrts13000-vsy-y5-pt1-5.txt,
+                    inputs/FONLL-Bhadron-dsdpt-sqrts13000-vsy-y5-pt5-20.txt,
+                    inputs/FONLL-Bhadron-dsdpt-sqrts13000-vsy-y5-pt20-100.txt]
         ptmins: [0., 1., 5., 20.]
         ptmaxs: [1., 5., 20., 100.]
         ymin: -5.
