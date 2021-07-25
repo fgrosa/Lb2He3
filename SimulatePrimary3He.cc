@@ -35,16 +35,16 @@ using namespace Pythia8;
 const int kPdgHe3 = 1000020030;
 const double massHe3 = 2.80839160743;
 
-enum syst 
+enum syst
 {
     kpp13TeV = 0
 };
 
-//__________________________________________________________________________________________________
-void SimulatePrimary3He(int system=kpp13TeV, int nEvents=1000000, double yMin=-0.5, double yMax=0.5, std::string outFileNameRoot="AnalysisResults.root", std::string outFileNameHepMC="AnalysisResults.hepmc", int seed=42);
+// //__________________________________________________________________________________________________
+// void SimulatePrimary3He(int system=kpp13TeV, int nEvents=1000000, double yMin=-0.5, double yMax=0.5, std::string outFileNameRoot="AnalysisResults.root", std::string outFileNameHepMC="AnalysisResults.hepmc", bool saveHepMC=true, int seed=42);
 
 //__________________________________________________________________________________________________
-void SimulatePrimary3He(int system, int nEvents, double yMin, double yMax, std::string outFileNameRoot, std::string outFileNameHepMC, int seed)
+void SimulatePrimary3He(int system, int nEvents, double yMin, double yMax, std::string outFileNameRoot, std::string outFileNameHepMC, bool saveHepMC, int seed)
 {
 
     //__________________________________________________________
@@ -54,11 +54,12 @@ void SimulatePrimary3He(int system, int nEvents, double yMin, double yMax, std::
     pythia.readString(Form("Tune:pp = 14"));
 
     // add 3He
-    pythia.particleData.addParticle(kPdgHe3, "3He++", "3He--", 2, 6, 0, massHe3, 0., massHe3, massHe3, 1.e9);   
+    pythia.particleData.addParticle(kPdgHe3, "3He++", "3He--", 2, 6, 0, massHe3, 0., massHe3, massHe3, 1.e9);
 
     // init
     pythia.readString("Random:setSeed = on");
     pythia.readString(Form("Random:seed %d", seed));
+    gRandom->SetSeed(seed);
     pythia.init();
 
     // define HepMC output
@@ -79,7 +80,6 @@ void SimulatePrimary3He(int system, int nEvents, double yMin, double yMax, std::
     {
         TFile* inFileSpectrum = TFile::Open("inputs/heliumSpectra_pp13TeV.root");
         fPtShape = (TF1*)inFileSpectrum->Get("fCombineHeliumSpecLevyFit_0-100");
-        fPtShape->SetRange(0., 100.);
         sigmaV0 = 57.8e9 * fPtShape->Integral(0, 100) * (yMax-yMin); // assuming flat y distribution --> conservative
     }
     fPtShape->SetName("fPrimary3He");
@@ -95,7 +95,7 @@ void SimulatePrimary3He(int system, int nEvents, double yMin, double yMax, std::
         if(iEvent%1000000 == 0)
             std::cout << Form("He3 number %10d\r", iEvent);
 
-        ptHe3 = fPtShape->GetRandom(); // to be substitute with TSallis or BlastWave 
+        ptHe3 = fPtShape->GetRandom(); // to be substitute with TSallis or BlastWave
         double phiHe3 = gRandom->Rndm() * 2 * TMath::Pi();
         double yHe3 = yMin + gRandom->Rndm() * (yMax-yMin); // flat in [yMin, yMax]
         pxHe3 = ptHe3 * TMath::Cos(phiHe3);
@@ -106,7 +106,7 @@ void SimulatePrimary3He(int system, int nEvents, double yMin, double yMax, std::
         double EHe3 = TMath::Sqrt(massHe3 * massHe3 + pHe3 * pHe3);
 
         hPrimary3He->Fill(ptHe3);
-    
+
         // He3
         Particle He3;
         He3.id(kPdgHe3);
@@ -132,20 +132,24 @@ void SimulatePrimary3He(int system, int nEvents, double yMin, double yMax, std::
         pythia.event.remove(2, pythia.event.size()-2);
 
         // write HepMC
+        if(saveHepMC)
+        {
 #ifdef __HEPMC3__
-                    HepMC3::GenEvent hepmcevt;
-                    ToHepMC.fill_next_event(pythia.event, &hepmcevt, -1, &pythia.info);
-                    outFileHepMC.write_event(hepmcevt);
+            HepMC3::GenEvent hepmcevt;
+            ToHepMC.fill_next_event(pythia.event, &hepmcevt, -1, &pythia.info);
+            outFileHepMC.write_event(hepmcevt);
 #endif
 #ifdef __HEPMC2__
-                    HepMC::GenEvent *hepmcevt = new HepMC::GenEvent();
-                    ToHepMC.fill_next_event(pythia, hepmcevt);
-                    ascii_io << hepmcevt;
-                    delete hepmcevt;
+            HepMC::GenEvent *hepmcevt = new HepMC::GenEvent();
+            ToHepMC.fill_next_event(pythia, hepmcevt);
+            ascii_io << hepmcevt;
+            delete hepmcevt;
 #endif
+        }
     }
 #ifdef __HEPMC3__
-    outFileHepMC.close();
+    if(saveHepMC)
+        outFileHepMC.close();
 #endif
 
     hPrimary3He->Scale(sigmaV0/nEvents);
