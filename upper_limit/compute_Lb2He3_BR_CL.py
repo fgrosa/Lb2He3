@@ -70,6 +70,7 @@ parser.add_argument(
     help='root output file name'
 )
 
+parser.add_argument('--lumi_totest', nargs='+')
 parser.add_argument('--hybcalc', action='store_true', default=False, help='use HybridCalculator for CL calculation')
 parser.add_argument('--asymcalc', action='store_true', default=False, help='use AsymptoticCalculator for CL calculation')
 parser.add_argument('--freqcalc', action='store_true', default=False, help='use FrequentistCalculator for CL calculation')
@@ -159,10 +160,6 @@ RooMsgService.instance().setGlobalKillBelow(RooFit.ERROR)
 RooMsgService.instance().setSilentMode(True)
 gErrorIgnoreLevel = kError
 
-lumi_to_test = [1., 10., 20., 50., 100., 200.]
-if args.det == 'ALICE3':
-   lumi_to_test += [300., 400., 500., 1000., 2000., 5000., 10000., 50000]
-
 br_mult_fact_to_test = [1.e-3, 2.e-3, 4.e-3, 6.e-3, 8.e-3,
                         1.e-2, 2.e-2, 4.e-2, 6.e-2, 8.e-2,
                         1.e-1, 2.e-1, 4.e-1, 6.e-1, 8.e-1,
@@ -177,7 +174,8 @@ gr_90cl.SetName('gr_90cl')
 cfit = None
 
 gr_smooth = TGraphSmooth('gr_smooth')
-for i_lumi, lumi in enumerate(lumi_to_test):
+for i_lumi, lumi in enumerate(args.lumi_totest):
+    lumi = float(lumi)
     signif_lim = [-1., -1., -1.]
     gr_nsigma.append([])
     spl_nsigma.append([])
